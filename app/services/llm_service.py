@@ -51,7 +51,15 @@ class LLMService:
         self.total_requests += 1
 
         # Attempt primary LLM if API key is provided
-        if self.provider == "gemini" and settings.GEMINI_API_KEY:
+        if (self.provider == "groq" or not (settings.GEMINI_API_KEY or settings.OPENAI_API_KEY or settings.ANTHROPIC_API_KEY)) and settings.GROQ_API_KEY:
+            try:
+                res = await self._call_groq(query)
+                logger.info("Parsed query with Groq in %.2fs", time.time() - start_time)
+                return res
+            except Exception as e:
+                logger.warning("Groq query parsing failed: %s. Trying fallback.", e)
+
+        elif self.provider == "gemini" and settings.GEMINI_API_KEY:
             try:
                 res = await self._call_gemini(query)
                 logger.info("Parsed query with Gemini in %.2fs", time.time() - start_time)
@@ -173,6 +181,29 @@ class LLMService:
             clean_json = self._clean_json_text(content)
             parsed = json.loads(clean_json)
             return self._build_query_understanding(parsed)
+
+    async def _call_groq(self, query: str) -> QueryUnderstanding:
+        """Call Groq API using AsyncGroq client."""
+        import groq
+        client = groq.AsyncGroq(api_key=settings.GROQ_API_KEY, timeout=settings.HTTP_TIMEOUT_SECONDS)
+        model = settings.GROQ_MODEL or "qwen/qwen3.8-27b"
+        resp = await client.chat.completions.create(
+            model=model,
+            messages=[
+                {"role": "system", "content": SYSTEM_PROMPT_QUERY_UNDERSTANDING},
+                {"role": "user", "content": f"User Query: {query}"}
+            ],
+            temperature=0.1,
+            response_format={"type": "json_object"}
+        )
+        if resp.usage:
+            self.total_input_tokens += resp.usage.prompt_tokens or 0
+            self.total_output_tokens += resp.usage.completion_tokens or 0
+
+        content = resp.choices[0].message.content
+        clean_json = self._clean_json_text(content)
+        parsed = json.loads(clean_json)
+        return self._build_query_understanding(parsed)
 
     def _clean_json_text(self, text: str) -> str:
         """Strip markdown code fence wrappers from JSON output."""

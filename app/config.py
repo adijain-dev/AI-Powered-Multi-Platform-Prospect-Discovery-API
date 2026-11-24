@@ -38,7 +38,7 @@ class Settings(BaseSettings):
 
     # Groq Settings (optional high-speed fallback)
     GROQ_API_KEY: Optional[str] = Field(default=None, description="Groq API Key")
-    GROQ_MODEL: str = Field(default="llama-3.3-70b-versatile", description="Groq model name")
+    GROQ_MODEL: str = Field(default="qwen/qwen3.8-27b", description="Groq model name")
 
     # Search Provider Keys (Optional: if empty, DuckDuckGo zero-config search is used)
     SERPER_API_KEY: Optional[str] = Field(default=None, description="Google Serper API Key")
